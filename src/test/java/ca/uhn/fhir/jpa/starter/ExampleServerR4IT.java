@@ -10,9 +10,9 @@ import ca.uhn.fhir.rest.api.EncodingEnum;
 import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.client.api.ServerValidationModeEnum;
-import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.client.ClientUpgradeRequest;
-import org.eclipse.jetty.websocket.client.WebSocketClient;
+import org.eclipse.jetty.ee10.websocket.api.Session;
+import org.eclipse.jetty.ee10.websocket.client.ClientUpgradeRequest;
+import org.eclipse.jetty.ee10.websocket.client.WebSocketClient;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.*;
 import org.hl7.fhir.instance.model.api.IIdType;
@@ -21,13 +21,14 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.web.server.LocalServerPort;
+import org.springframework.boot.test.web.server.LocalServerPort;
 
 
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -236,7 +237,7 @@ class ExampleServerR4IT implements IServerSupport{
 		URI echoUri = new URI("ws://localhost:" + port + "/websocket");
 		ClientUpgradeRequest request = new ClientUpgradeRequest();
 		ourLog.info("Connecting to : {}", echoUri);
-		Future<Session> connection = myWebSocketClient.connect(mySocketImplementation, echoUri, request);
+		CompletableFuture<Session> connection = myWebSocketClient.connect(mySocketImplementation, echoUri, request);
 		Session session = connection.get(2, TimeUnit.SECONDS);
 
 		ourLog.info("Connected to WS: {}", session.isOpen());

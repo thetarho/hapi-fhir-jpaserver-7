@@ -75,7 +75,7 @@ import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.web.cors.CorsConfiguration;
 
 import java.util.*;
-import javax.persistence.EntityManagerFactory;
+import jakarta.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 
 import static ca.uhn.fhir.jpa.starter.common.validation.IRepositoryValidationInterceptorFactory.ENABLE_REPOSITORY_VALIDATING_INTERCEPTOR;
@@ -134,9 +134,9 @@ public class StarterJpaConfig {
 	public LocalContainerEntityManagerFactoryBean entityManagerFactory(
 			DataSource myDataSource,
 			ConfigurableListableBeanFactory myConfigurableListableBeanFactory,
-			FhirContext theFhirContext) {
+			FhirContext theFhirContext, JpaStorageSettings theJpaStorageSettings) {
 		LocalContainerEntityManagerFactoryBean retVal =
-				HapiEntityManagerFactoryUtil.newEntityManagerFactory(myConfigurableListableBeanFactory, theFhirContext);
+				HapiEntityManagerFactoryUtil.newEntityManagerFactory(myConfigurableListableBeanFactory, theFhirContext, theJpaStorageSettings);
 		retVal.setPersistenceUnitName("HAPI_PU");
 
 		try {

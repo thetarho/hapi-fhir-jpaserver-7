@@ -5,7 +5,10 @@
 
     <properties>
         <java.version>17</java.version>
-        <hapi.fhir.jpa.server.starter.revision>1</hapi.fhir.jpa.server.starter.revision>
+	<hapi.fhir.jpa.server.starter.revision>1</hapi.fhir.jpa.server.starter.revision>
+	<spring.version>3.3.5</spring.version>
+        <spring_boot_version>3.3.5</spring_boot_version>
+	<tomcat.version>10.1.35</tomcat.version>
     </properties>
 
     <!-- one-liner to take you to the cloud with settings form the application.yaml file: -->
@@ -422,7 +425,7 @@
                     probably solved in 3.2.1 https://github.com/spring-projects/spring-boot/issues/38585
                     (at the moment only tomcat works)
                     -->
-                    <loaderImplementation>CLASSIC</loaderImplementation>
+		    <loaderImplementation>CLASSIC</loaderImplementation>
                 </configuration>
                 <executions>
                     <execution>
@@ -604,7 +607,33 @@
                 <dependency>
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-starter-web</artifactId>
-                    <version>${spring_boot_version}</version>
+		    <version>${spring_boot_version}</version>
+                    <exclusions>
+                        <exclusion>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-starter-tomcat</artifactId>
+                        </exclusion>
+                    </exclusions>
+	        </dependency>
+	        <dependency>
+                    <groupId>org.apache.tomcat.embed</groupId>
+                    <artifactId>tomcat-embed-core</artifactId>
+                    <version>${tomcat.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.tomcat.embed</groupId>
+                    <artifactId>tomcat-embed-el</artifactId>
+                    <version>${tomcat.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.tomcat.embed</groupId>
+                    <artifactId>tomcat-embed-websocket</artifactId>
+                    <version>${tomcat.version}</version>
+                </dependency>
+                <dependency>
+                    <groupId>org.apache.tomcat.embed</groupId>
+                    <artifactId>tomcat-embed-jasper</artifactId>
+                    <version>${tomcat.version}</version>
                 </dependency>
             </dependencies>
         </profile>

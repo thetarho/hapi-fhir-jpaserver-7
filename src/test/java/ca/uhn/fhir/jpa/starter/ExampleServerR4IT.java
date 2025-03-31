@@ -13,6 +13,10 @@ import ca.uhn.fhir.rest.client.api.ServerValidationModeEnum;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.Session;
 import jakarta.websocket.WebSocketContainer;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IIdType;
 import org.hl7.fhir.r4.model.Bundle;
@@ -29,12 +33,15 @@ import org.hl7.fhir.r4.model.Subscription;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -55,15 +62,15 @@ import static org.opencds.cqf.fhir.utility.r4.Parameters.stringPart;
 		NicknameServiceConfig.class,
 		RepositoryConfig.class
 	}, properties = {
-	"spring.profiles.include=storageSettingsTest",
 	"spring.datasource.url=jdbc:h2:mem:dbr4",
 	"hapi.fhir.enable_repository_validating_interceptor=true",
 	"hapi.fhir.fhir_version=r4",
-	//"hapi.fhir.subscription.websocket_enabled=true",
+	"hapi.fhir.subscription.websocket_enabled=true",
 	//"hapi.fhir.mdm_enabled=true",
 	"hapi.fhir.cr.enabled=true",
-	"hapi.fhir.cr.caregaps_section_author=Organization/alphora-author",
-	"hapi.fhir.cr.caregaps_reporter=Organization/alphora",
+	"hapi.fhir.cr.caregaps.section_author=Organization/alphora-author",
+	"hapi.fhir.cr.caregaps.reporter=Organization/alphora",
+	"hapi.fhir.cr.cql.data.search_parameter_mode=USE_SEARCH_PARAMETERS",
 	"hapi.fhir.implementationguides.dk-core.name=hl7.fhir.dk.core",
 	"hapi.fhir.implementationguides.dk-core.version=1.1.0",
 	"hapi.fhir.auto_create_placeholder_reference_targets=true",
@@ -111,7 +118,7 @@ class ExampleServerR4IT implements IServerSupport {
 		Parameters inParams = new Parameters();
 		inParams.addParameter().setName("periodStart").setValue(new StringType("2019-01-01"));
 		inParams.addParameter().setName("periodEnd").setValue(new StringType("2019-12-31"));
-		inParams.addParameter().setName("reportType").setValue(new StringType("summary"));
+		inParams.addParameter().setName("reportType").setValue(new StringType("population"));
 
 		Parameters outParams = ourClient
 			.operation()
@@ -129,13 +136,6 @@ class ExampleServerR4IT implements IServerSupport {
 		assertTrue(component.getResource() instanceof MeasureReport);
 		MeasureReport report = (MeasureReport) component.getResource();
 		assertEquals(measureUrl + "|0.0.003", report.getMeasure());
-	}
-
-	private org.hl7.fhir.r4.model.Bundle loadBundle(String theLocation, FhirContext theCtx, IGenericClient theClient) throws IOException {
-		String json = stringFromResource(theLocation);
-		org.hl7.fhir.r4.model.Bundle bundle = (org.hl7.fhir.r4.model.Bundle) theCtx.newJsonParser().parseResource(json);
-		org.hl7.fhir.r4.model.Bundle result = theClient.transaction().withBundle(bundle).execute();
-		return result;
 	}
 
 	public Parameters runCqlExecution(Parameters parameters) {
@@ -237,7 +237,7 @@ class ExampleServerR4IT implements IServerSupport {
 		IIdType mySubscriptionId = methodOutcome.getId();
 
 		// Wait for the subscription to be activated
-		await().atMost(1, TimeUnit.MINUTES).until(()->activeSubscriptionCount(), equalTo(initialActiveSubscriptionCount + 1));
+		await().atMost(1, TimeUnit.MINUTES).until(this::activeSubscriptionCount, equalTo(initialActiveSubscriptionCount + 1));
 
 		/*
 		 * Attach websocket
@@ -275,8 +275,8 @@ class ExampleServerR4IT implements IServerSupport {
 	@Test
 	void testCareGaps() throws IOException {
 
-		var reporter = crProperties.getCareGapsReporter();
-		var author = crProperties.getCareGapsSectionAuthor();
+		var reporter = crProperties.getCareGaps().getReporter();
+		var author = crProperties.getCareGaps().getSection_author();
 
 		assertTrue(reporter.equals("Organization/alphora"));
 		assertTrue(author.equals("Organization/alphora-author"));
@@ -314,6 +314,50 @@ class ExampleServerR4IT implements IServerSupport {
 			.size();
 	}
 
+	@ParameterizedTest
+	@ValueSource(strings = {"prometheus", "health", "metrics", "info"})
+	void testActuatorEndpointExists(String endpoint) throws IOException, URISyntaxException {
+
+		CloseableHttpClient httpclient = HttpClients.createDefault();
+		CloseableHttpResponse response = httpclient.execute(new HttpGet(new URI("http", null, "localhost", port, "/actuator/" + endpoint, null, null)));
+		int statusCode = response.getStatusLine().getStatusCode();
+		assertEquals(200, statusCode);
+
+	}
+
+	@Test
+	void testDiffOperationIsRegistered() {
+		String methodName = "testDiff";
+		ourLog.info("Entering " + methodName + "()...");
+
+		Patient pt = new Patient();
+		pt.setActive(true);
+		pt.getBirthDateElement().setValueAsString("2020-01-01");
+		pt.addIdentifier().setSystem("http://foo").setValue("12345");
+		pt.addName().setFamily(methodName);
+		IIdType id = ourClient.create().resource(pt).execute().getId();
+
+		//now update the patient
+		pt.setId(id);
+		pt.getBirthDateElement().setValueAsString("2025-01-01");
+		ourClient.update().resource(pt).execute();
+
+		//now try a diff
+		Parameters outParams = ourClient.operation().onInstance(id).named("$diff").withNoParameters(Parameters.class).execute();
+		ourLog.trace("Params->\n{}", ourCtx.newJsonParser().setPrettyPrint(true).encodeResourceToString(outParams));
+		boolean foundDobChange = false;
+		//really, if we get a response at all, then the Diff worked, but we'll check the contents here anyway for good measure to see that our change is reflected
+		for(Parameters.ParametersParameterComponent ppc : outParams.getParameter() ) {
+			for(Parameters.ParametersParameterComponent ppc2 : ppc.getPart() ) {
+				if( "Patient.birthDate".equals(ppc2.getValue().toString()) ){
+					foundDobChange = true;
+					break;
+				}
+			}
+		}
+		assertTrue(foundDobChange);
+	}
+
 	@BeforeEach
 	void beforeEach() {
 
@@ -327,4 +371,5 @@ class ExampleServerR4IT implements IServerSupport {
 		//	return activeSubscriptionCount() == 2; // 2 subscription based on mdm-rules.json
 		//});
 	}
+
 }

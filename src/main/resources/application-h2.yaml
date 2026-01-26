@@ -1,0 +1,15 @@
+# H2 in-memory database configuration
+# Activated via: -Dspring-boot.run.profiles=h2
+# Use this profile for quick local development without external database
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:test_mem
+    username: sa
+    password: null
+    driverClassName: org.h2.Driver
+  jpa:
+    properties:
+      hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirH2Dialect
+      hibernate.format_sql: false
+      hibernate.show_sql: false

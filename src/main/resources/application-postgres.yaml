@@ -1,0 +1,17 @@
+# PostgreSQL configuration for CI/CD smoke tests
+# Activated via: -Dspring-boot.run.profiles=postgres
+# This profile is used by GitHub Actions smoke-tests.yml workflow
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/hapi}
+    username: ${SPRING_DATASOURCE_USERNAME:hapi}
+    password: ${SPRING_DATASOURCE_PASSWORD:hapi}
+    driverClassName: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    properties:
+      hibernate.dialect: ca.uhn.fhir.jpa.model.dialect.HapiFhirPostgres94Dialect
+      hibernate.format_sql: false
+      hibernate.show_sql: false

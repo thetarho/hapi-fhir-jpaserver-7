@@ -1,0 +1,275 @@
+name: Promote HAPI FHIR JPA Server Release Candidate to Release
+
+# This workflow RE-TAGS a tested RC image as the final release
+# NO REBUILD occurs - the exact tested image is promoted
+on:
+  workflow_dispatch:
+    inputs:
+      rc_tag:
+        description: 'RC tag to promote (e.g., v2026-01-26_4.2-rc3)'
+        required: true
+        type: string
+      release_tag:
+        description: 'Release tag (e.g., v2026-01-28_4.2-release)'
+        required: true
+        type: string
+      update_latest:
+        description: 'Also update the :latest tag'
+        required: true
+        type: boolean
+        default: true
+      qa_sign_off:
+        description: 'QA sign-off reference (issue/ticket number)'
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: thetarho/hapi-fhir-jpaserver
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      rc_digest: ${{ steps.get_digest.outputs.digest }}
+      rc_exists: ${{ steps.check_rc.outputs.exists }}
+
+    steps:
+      - name: Validate input tags
+        run: |
+          RC_TAG="${{ inputs.rc_tag }}"
+          RELEASE_TAG="${{ inputs.release_tag }}"
+
+          # Validate RC tag format: v{YYYY-MM-DD}_{version}-rc{n}
+          # Examples: v2026-01-26_4.2-rc1, v2026-01-26_4.2.1-rc2
+          if [[ ! "$RC_TAG" =~ ^v[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]+\.[0-9]+(\.[0-9]+)?-rc[0-9]+$ ]]; then
+            echo "::error::Invalid RC tag format: $RC_TAG"
+            echo "Expected format: v2026-01-26_4.2-rc1 or v2026-01-26_4.2.1-rc1"
+            exit 1
+          fi
+
+          # Validate release tag format: v{YYYY-MM-DD}_{version}-release
+          # Examples: v2026-01-28_4.2-release, v2026-01-28_4.2.1-release
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]+\.[0-9]+(\.[0-9]+)?-release$ ]]; then
+            echo "::error::Invalid release tag format: $RELEASE_TAG"
+            echo "Expected format: v2026-01-28_4.2-release or v2026-01-28_4.2.1-release"
+            exit 1
+          fi
+
+          # Extract version numbers (after date, before -rc or -release)
+          RC_VERSION=$(echo "$RC_TAG" | sed 's/^v[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}_//' | sed 's/-rc[0-9]*$//')
+          RELEASE_VERSION=$(echo "$RELEASE_TAG" | sed 's/^v[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}_//' | sed 's/-release$//')
+
+          if [[ "$RC_VERSION" != "$RELEASE_VERSION" ]]; then
+            echo "::error::Version mismatch: RC version ($RC_VERSION) != Release version ($RELEASE_VERSION)"
+            exit 1
+          fi
+
+          echo "Validation passed!"
+          echo "RC Tag: $RC_TAG"
+          echo "Release Tag: $RELEASE_TAG"
+          echo "Version: $RC_VERSION"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.THETARHO_GHCR_TOKEN }}
+
+      - name: Check RC image exists
+        id: check_rc
+        run: |
+          RC_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.rc_tag }}"
+          echo "Checking if RC image exists: $RC_IMAGE"
+
+          if docker manifest inspect "$RC_IMAGE" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "RC image found!"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::error::RC image not found: $RC_IMAGE"
+            exit 1
+          fi
+
+      - name: Get RC image digest
+        id: get_digest
+        run: |
+          RC_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.rc_tag }}"
+
+          # Pull the image to get its digest
+          docker pull "$RC_IMAGE"
+          DIGEST=$(docker inspect "$RC_IMAGE" --format='{{index .RepoDigests 0}}' | cut -d'@' -f2)
+
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+          echo "RC Image Digest: $DIGEST"
+
+  promote:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.THETARHO_GHCR_TOKEN }}
+
+      - name: Install crane (for re-tagging)
+        run: |
+          VERSION="v0.19.1"
+          curl -sL "https://github.com/google/go-containerregistry/releases/download/${VERSION}/go-containerregistry_Linux_x86_64.tar.gz" | tar -xzf - crane
+          chmod +x crane
+          sudo mv crane /usr/local/bin/
+
+      - name: Authenticate crane with GHCR
+        run: |
+          echo "${{ secrets.THETARHO_GHCR_TOKEN }}" | crane auth login ${{ env.REGISTRY }} -u ${{ secrets.GHCR_USERNAME }} --password-stdin
+
+      - name: Re-tag RC image as release
+        id: retag
+        run: |
+          RC_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.rc_tag }}"
+          RELEASE_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.release_tag }}"
+
+          echo "Re-tagging:"
+          echo "  Source: $RC_IMAGE"
+          echo "  Target: $RELEASE_IMAGE"
+
+          # Use crane to copy/retag (no rebuild, same digest)
+          crane copy "$RC_IMAGE" "$RELEASE_IMAGE"
+
+          echo "release_image=$RELEASE_IMAGE" >> $GITHUB_OUTPUT
+          echo "Successfully re-tagged as release!"
+
+      - name: Update latest tag
+        if: inputs.update_latest == true
+        run: |
+          RC_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.rc_tag }}"
+          LATEST_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+
+          echo "Updating latest tag:"
+          echo "  Source: $RC_IMAGE"
+          echo "  Target: $LATEST_IMAGE"
+
+          crane copy "$RC_IMAGE" "$LATEST_IMAGE"
+
+          echo "Successfully updated :latest tag!"
+
+      - name: Verify digests match
+        run: |
+          RC_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.rc_tag }}"
+          RELEASE_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.release_tag }}"
+
+          RC_DIGEST=$(crane digest "$RC_IMAGE")
+          RELEASE_DIGEST=$(crane digest "$RELEASE_IMAGE")
+
+          echo "RC Digest:      $RC_DIGEST"
+          echo "Release Digest: $RELEASE_DIGEST"
+
+          if [[ "$RC_DIGEST" == "$RELEASE_DIGEST" ]]; then
+            echo "Digest verification PASSED - images are identical!"
+          else
+            echo "::error::Digest mismatch! RC and Release images are different!"
+            exit 1
+          fi
+
+          if [[ "${{ inputs.update_latest }}" == "true" ]]; then
+            LATEST_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            LATEST_DIGEST=$(crane digest "$LATEST_IMAGE")
+            echo "Latest Digest:  $LATEST_DIGEST"
+
+            if [[ "$RC_DIGEST" == "$LATEST_DIGEST" ]]; then
+              echo "Latest tag verification PASSED!"
+            else
+              echo "::error::Latest tag digest mismatch!"
+              exit 1
+            fi
+          fi
+
+          # Save digest for manifest
+          echo "VERIFIED_DIGEST=$RC_DIGEST" >> $GITHUB_ENV
+
+      - name: Checkout for manifest generation
+        uses: actions/checkout@v4
+
+      - name: Generate release manifest
+        run: |
+          cat > release-manifest.json <<EOF
+          {
+            "component": "hapi-fhir-jpaserver",
+            "type": "release",
+            "version": "${{ inputs.release_tag }}",
+            "promoted_from": "${{ inputs.rc_tag }}",
+            "image": "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}",
+            "tags": [
+              "${{ inputs.release_tag }}"${{ inputs.update_latest == true && ', "latest"' || '' }}
+            ],
+            "digest": "${{ env.VERIFIED_DIGEST }}",
+            "repository": "${{ github.repository }}",
+            "promoted_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "promoted_by": "${{ github.actor }}",
+            "qa_sign_off": "${{ inputs.qa_sign_off }}",
+            "workflow_run_id": "${{ github.run_id }}",
+            "verification": {
+              "digest_match": true,
+              "rc_digest": "${{ env.VERIFIED_DIGEST }}",
+              "release_digest": "${{ env.VERIFIED_DIGEST }}"
+            }
+          }
+          EOF
+          cat release-manifest.json
+
+      - name: Upload release manifest as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-hapi-fhir-jpaserver-${{ inputs.release_tag }}
+          path: release-manifest.json
+          retention-days: 365
+
+      - name: Create Git tag for release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if tag already exists
+          if git ls-remote --tags origin | grep -q "refs/tags/${{ inputs.release_tag }}"; then
+            echo "Tag ${{ inputs.release_tag }} already exists, skipping tag creation"
+          else
+            echo "Creating tag ${{ inputs.release_tag }}"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "${{ inputs.release_tag }}" -m "Release ${{ inputs.release_tag }} promoted from ${{ inputs.rc_tag }}
+
+Promoted by: ${{ github.actor }}
+QA Sign-off: ${{ inputs.qa_sign_off }}
+Digest: ${{ env.VERIFIED_DIGEST }}"
+            git push origin "${{ inputs.release_tag }}"
+          fi
+
+      - name: Summary
+        run: |
+          echo "### HAPI FHIR JPA Server Release Promotion Complete! :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Promoted RC:** \`${{ inputs.rc_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Tag:** \`${{ inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.release_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Digest:** \`${{ env.VERIFIED_DIGEST }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Latest Updated:** \`${{ inputs.update_latest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**QA Sign-off:** \`${{ inputs.qa_sign_off }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Verification" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] RC image exists" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Digest verification passed (RC = Release)" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Release manifest generated" >> $GITHUB_STEP_SUMMARY
+          echo "- [x] Git tag created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Deploy to production using the ThetaRhoDeployment workflow" >> $GITHUB_STEP_SUMMARY
+          echo "2. Use image tag: \`${{ inputs.release_tag }}\` or \`latest\`" >> $GITHUB_STEP_SUMMARY

@@ -50,9 +50,9 @@ jobs:
     - name: Docker Pull HTTP client
       run: docker pull jetbrains/intellij-http-client
 
-    - name: Start server with jetty and PostgreSQL profile
+    - name: Start server with Tomcat and PostgreSQL profile
       run: |
-        mvn -P jetty spring-boot:run -Dspring-boot.run.profiles=postgres & export JPA_PROCESS=$!
+        mvn -P boot spring-boot:run -Dspring-boot.run.profiles=postgres & export JPA_PROCESS=$!
         sleep 80
 
     - name: Execute smoke tests

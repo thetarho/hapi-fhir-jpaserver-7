@@ -243,11 +243,11 @@ jobs:
             echo "Creating tag ${{ inputs.release_tag }}"
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag -a "${{ inputs.release_tag }}" -m "Release ${{ inputs.release_tag }} promoted from ${{ inputs.rc_tag }}
-
-Promoted by: ${{ github.actor }}
-QA Sign-off: ${{ inputs.qa_sign_off }}
-Digest: ${{ env.VERIFIED_DIGEST }}"
+            TAG_MESSAGE="Release ${{ inputs.release_tag }} promoted from ${{ inputs.rc_tag }}"
+            TAG_MESSAGE="${TAG_MESSAGE} | Promoted by: ${{ github.actor }}"
+            TAG_MESSAGE="${TAG_MESSAGE} | QA Sign-off: ${{ inputs.qa_sign_off }}"
+            TAG_MESSAGE="${TAG_MESSAGE} | Digest: ${{ env.VERIFIED_DIGEST }}"
+            git tag -a "${{ inputs.release_tag }}" -m "$TAG_MESSAGE"
             git push origin "${{ inputs.release_tag }}"
           fi
 

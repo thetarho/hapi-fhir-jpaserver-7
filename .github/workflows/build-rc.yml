@@ -19,8 +19,10 @@ env:
 jobs:
   build-rc:
     runs-on: ubuntu-latest
+    # Skip if this is a tag push triggered by github-actions[bot] (already built via workflow_dispatch)
+    if: ${{ !(github.event_name == 'push' && github.actor == 'github-actions[bot]') }}
     permissions:
-      contents: read
+      contents: write  # Required for creating git tags
       packages: write
       security-events: write
 
@@ -32,6 +34,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for tagging
 
       - name: Extract version from tag
         id: version
@@ -66,6 +70,23 @@ jobs:
           # Extract RC number
           RC_NUMBER=$(echo "$VERSION" | grep -oP 'rc\K[0-9]+$' || echo "0")
           echo "rc_number=$RC_NUMBER" >> $GITHUB_OUTPUT
+
+      - name: Create git tag (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Check if tag already exists
+          if git ls-remote --tags origin | grep -q "refs/tags/${VERSION}$"; then
+            echo "Tag ${VERSION} already exists, skipping tag creation"
+          else
+            echo "Creating git tag: ${VERSION}"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "${VERSION}" -m "Release Candidate ${VERSION} created via workflow_dispatch by ${{ github.actor }}"
+            git push origin "${VERSION}"
+            echo "Git tag ${VERSION} created and pushed successfully"
+          fi
 
       - name: Log in to GHCR
         uses: docker/login-action@v3

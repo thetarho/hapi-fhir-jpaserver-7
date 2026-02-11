@@ -197,6 +197,8 @@ jobs:
 
       - name: Checkout for manifest generation
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history and tags
 
       - name: Generate release manifest
         run: |
@@ -240,14 +242,19 @@ jobs:
           if git ls-remote --tags origin | grep -q "refs/tags/${{ inputs.release_tag }}"; then
             echo "Tag ${{ inputs.release_tag }} already exists, skipping tag creation"
           else
-            echo "Creating tag ${{ inputs.release_tag }}"
+            # Get the commit SHA that the RC tag points to
+            RC_COMMIT=$(git rev-list -n 1 "${{ inputs.rc_tag }}")
+            echo "RC tag ${{ inputs.rc_tag }} points to commit: $RC_COMMIT"
+
+            echo "Creating release tag ${{ inputs.release_tag }} on commit $RC_COMMIT"
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             TAG_MESSAGE="Release ${{ inputs.release_tag }} promoted from ${{ inputs.rc_tag }}"
             TAG_MESSAGE="${TAG_MESSAGE} | Promoted by: ${{ github.actor }}"
             TAG_MESSAGE="${TAG_MESSAGE} | QA Sign-off: ${{ inputs.qa_sign_off }}"
             TAG_MESSAGE="${TAG_MESSAGE} | Digest: ${{ env.VERIFIED_DIGEST }}"
-            git tag -a "${{ inputs.release_tag }}" -m "$TAG_MESSAGE"
+            # Create the release tag on the same commit as the RC tag
+            git tag -a "${{ inputs.release_tag }}" "$RC_COMMIT" -m "$TAG_MESSAGE"
             git push origin "${{ inputs.release_tag }}"
           fi
 

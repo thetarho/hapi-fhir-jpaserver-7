@@ -8,8 +8,8 @@ While this project shows how you can use many parts of the HAPI FHIR framework t
 
 1) The service comes with no security implementation. See how it can be done [here](https://hapifhir.io/hapi-fhir/docs/security/introduction.html)
 2) The service comes with no enterprise logging. See how it can be done [here](https://hapifhir.io/hapi-fhir/docs/security/balp_interceptor.html)
-3) The internal topic cache used by subscriptions in HAPI FHIR are not shared across multiple instances as the [default supplied implementation is in-mem](https://github.com/hapifhir/hapi-fhir/blob/master/hapi-fhir-jpaserver-subscription/src/main/java/ca/uhn/fhir/jpa/topic/ActiveSubscriptionTopicCache.java)
-4) The internal message broker channel in HAPI FHIR is not shared across multiple instances as the [default supplied implementation is in-mem](https://github.com/hapifhir/hapi-fhir/blob/master/hapi-fhir-storage/src/main/java/ca/uhn/fhir/jpa/subscription/channel/api/IChannelFactory.java). This impacts the use of modules listed [here](https://smilecdr.com/docs/installation/message_broker.html#modules-dependent-on-message-brokers)
+3) The internal topic cache used by subscriptions in HAPI FHIR are not shared across multiple instances as the [default supplied implementation is in-mem](https://github.com/hapifhir/hapi-fhir/blob/main/hapi-fhir-jpaserver-subscription/src/main/java/ca/uhn/fhir/jpa/topic/ActiveSubscriptionTopicCache.java)
+4) The internal message broker channel in HAPI FHIR is not shared across multiple instances as the [default supplied implementation is in-mem](https://github.com/hapifhir/hapi-fhir/blob/main/hapi-fhir-storage/src/main/java/ca/uhn/fhir/jpa/subscription/channel/api/IChannelFactory.java). This impacts the use of modules listed [here](https://smilecdr.com/docs/installation/message_broker.html#modules-dependent-on-message-brokers)
 
 Need Help? Please see: https://github.com/hapifhir/hapi-fhir/wiki/Getting-Help
 
@@ -47,7 +47,7 @@ You can customize HAPI directly from the `run` command using environment variabl
 docker run -p 8080:8080 -e hapi.fhir.default_encoding=xml hapiproject/hapi:latest
 ```
 
-HAPI looks in the environment variables for properties in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) file for defaults.
+HAPI looks in the environment variables for properties in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) file for defaults.
 
 ### Configuration via overridden application.yaml file and using Docker
 
@@ -379,7 +379,7 @@ The UI that comes with this server is an exact clone of the server available at 
 
 The UI is customized using [Thymeleaf](https://www.thymeleaf.org/) template files. You might want to learn more about Thymeleaf, but you don't necessarily need to: they are quite easy to figure out.
 
-Several template files that can be customized are found in the following directory: [https://github.com/hapifhir/hapi-fhir-jpaserver-starter/tree/master/src/main/webapp/WEB-INF/templates](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/tree/master/src/main/webapp/WEB-INF/templates)
+Several template files that can be customized are found in the following directory: [https://github.com/hapifhir/hapi-fhir-jpaserver-starter/tree/main/src/main/webapp/WEB-INF/templates](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/tree/main/src/main/webapp/WEB-INF/templates)
 
 ## Deploying to an Application Server
 
@@ -480,7 +480,7 @@ Point your browser (or fiddler, or what have you) to `http://localhost:8080/hapi
 
 ## Enabling Subscriptions
 
-The server may be configured with subscription support by enabling properties in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) file:
+The server may be configured with subscription support by enabling properties in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) file:
 
 - `hapi.fhir.subscription.resthook_enabled` - Enables REST Hook subscriptions, where the server will make an outgoing connection to a remote REST server
 
@@ -490,19 +490,19 @@ The server may be configured with subscription support by enabling properties in
 
 ## Enabling Clinical Reasoning
 
-Set `hapi.fhir.cr.enabled=true` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) file to enable [Clinical Quality Language](https://cql.hl7.org/) on this server.  An alternate settings file, [cds.application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/cds.application.yaml), exists with the Clinical Reasoning module enabled and default settings that have been found to work with most CDS and dQM test cases.
+Set `hapi.fhir.cr.enabled=true` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) file to enable [Clinical Quality Language](https://cql.hl7.org/) on this server.  An alternate settings file, [cds.application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/cds.application.yaml), exists with the Clinical Reasoning module enabled and default settings that have been found to work with most CDS and dQM test cases.
 
 ## Enabling CDS Hooks
 
-Set `hapi.fhir.cdshooks.enabled=true` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) file to enable [CDS Hooks](https://cds-hooks.org/) on this server.  The Clinical Reasoning module must also be enabled because this implementation of CDS Hooks includes [CDS on FHIR](https://build.fhir.org/clinicalreasoning-cds-on-fhir.html).  An example CDS Service using CDS on FHIR is available in the CdsHooksServletIT test class.
+Set `hapi.fhir.cdshooks.enabled=true` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) file to enable [CDS Hooks](https://cds-hooks.org/) on this server.  The Clinical Reasoning module must also be enabled because this implementation of CDS Hooks includes [CDS on FHIR](https://build.fhir.org/clinicalreasoning-cds-on-fhir.html).  An example CDS Service using CDS on FHIR is available in the CdsHooksServletIT test class.
 
 ## Enabling MDM (EMPI)
 
-Set `hapi.fhir.mdm_enabled=true` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) file to enable MDM on this server.  The MDM matching rules are configured in [mdm-rules.json](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/mdm-rules.json).  The rules in this example file should be replaced with actual matching rules appropriate to your data. Note that MDM relies on subscriptions, so for MDM to work, subscriptions must be enabled.
+Set `hapi.fhir.mdm_enabled=true` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) file to enable MDM on this server.  The MDM matching rules are configured in [mdm-rules.json](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/mdm-rules.json).  The rules in this example file should be replaced with actual matching rules appropriate to your data. Note that MDM relies on subscriptions, so for MDM to work, subscriptions must be enabled.
 
 ## Using Elasticsearch
 
-By default, the server will use embedded lucene indexes for terminology and fulltext indexing purposes. You can switch this to using lucene by editing the properties in [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml)
+By default, the server will use embedded lucene indexes for terminology and fulltext indexing purposes. You can switch this to using lucene by editing the properties in [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml)
 
 For example:
 
@@ -518,16 +518,16 @@ elasticsearch.schema_management_strategy=CREATE
 
 ## Enabling LastN
 
-Set `hapi.fhir.lastn_enabled=true` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) file to enable the $lastn operation on this server.  Note that the $lastn operation relies on Elasticsearch, so for $lastn to work, indexing must be enabled using Elasticsearch.
+Set `hapi.fhir.lastn_enabled=true` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) file to enable the $lastn operation on this server.  Note that the $lastn operation relies on Elasticsearch, so for $lastn to work, indexing must be enabled using Elasticsearch.
 
 ## Enabling Resource to be stored in Lucene Index
 
-Set `hapi.fhir.store_resource_in_lucene_index_enabled` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) file to enable storing of resource json along with Lucene/Elasticsearch index mappings.
+Set `hapi.fhir.store_resource_in_lucene_index_enabled` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) file to enable storing of resource json along with Lucene/Elasticsearch index mappings.
 
 ## Changing cached search results time
 
-It is possible to change the cached search results time. The option `reuse_cached_search_results_millis` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) is 6000 miliseconds by default.
-Set `reuse_cached_search_results_millis: -1` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/master/src/main/resources/application.yaml) file to ignore the cache time every search.
+It is possible to change the cached search results time. The option `reuse_cached_search_results_millis` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) is 6000 miliseconds by default.
+Set `reuse_cached_search_results_millis: -1` in the [application.yaml](https://github.com/hapifhir/hapi-fhir-jpaserver-starter/blob/main/src/main/resources/application.yaml) file to ignore the cache time every search.
 
 ## Build the distroless variant of the image (for lower footprint and improved security)
 

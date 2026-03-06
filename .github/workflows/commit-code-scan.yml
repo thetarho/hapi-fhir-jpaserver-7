@@ -1,0 +1,115 @@
+name: PR Content Guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  phi-scan:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Scan Content
+        id: scanner
+        run: |
+          # Use explicit SHAs for comparison logic
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          # Add a suppress tag
+          SUPPRESS_TAG='PHI-IGNORE'
+
+          # --- Define Individual Regex Patterns ---
+          EMAIL_REGEX='[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+          SSN_REGEX='[0-9]{3}-[0-9]{2}-[0-9]{4}'
+          PHONE_FAX_REGEX='(\([0-9]{3}\)-[0-9]{3}-[0-9]{4})|([0-9]{3}-[0-9]{3}-[0-9]{4})|([0-9]{3} [0-9]{3} [0-9]{4})|([0-9]{10})'
+          URL_REGEX='https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}'
+
+          # --- PROVIDERS ID List ---
+          PROVIDER_IDS=(16324 32348 7697 24331 21346 11783 16349 25314)
+          PROVIDERS_LIST_PATTERN=$(printf "|%s" "${PROVIDER_IDS[@]}")
+          PROVIDERS_LIST_PATTERN="${PROVIDERS_LIST_PATTERN:1}"
+          PROVIDER_REGEX="\\b($PROVIDERS_LIST_PATTERN)\\b"
+
+          COMBINED_REGEX="($EMAIL_REGEX|$SSN_REGEX|$PHONE_FAX_REGEX|$URL_REGEX|$PROVIDER_REGEX)"
+          
+          # --- Exclusions ---
+          EXCLUSIONS=(
+            ':!tests/**'
+            ':!docs/**'
+            ':!fixtures/**'
+            ':!node_modules/**'
+            ':!.github/workflows/**'
+          )
+
+          echo "### 🛡️ PHI & Sensitive Data Audit Scan" > scan_results.md
+          
+          # 1. Scan Commit Messages
+          # Compare commit messages between PR base and head
+          MESSAGES=$(git log $BASE_SHA..$HEAD_SHA --pretty=%B)
+          COMMIT_MATCHES=$(echo "$MESSAGES" | grep -vi "$SUPPRESS_TAG" | grep -Eio "$COMBINED_REGEX" | sort -u || true)
+          
+          if [ -n "$COMMIT_MATCHES" ]; then
+            echo -e "\n#### 💬 Commit Messages\n\`\`\`\n$COMMIT_MATCHES\n\`\`\`" >> scan_results.md
+          fi
+
+          # 2. Scan Code Changes (The Detective Loop)
+          # unified=0 gives us just the changed lines for cleaner parsing
+          DIFF_DATA=$(git diff $BASE_SHA...$HEAD_SHA --unified=0 -- . "${EXCLUSIONS[@]}" || true)
+          
+          CODE_REPORT=""
+          CURRENT_FILE=""
+          CURRENT_LINE=0
+
+          while read -r line; do
+            # BASH_REMATCH: Capture Filename
+            if [[ "$line" =~ ^\+\+\+\ b/(.*) ]]; then
+              CURRENT_FILE="${BASH_REMATCH[1]}"
+            
+            # BASH_REMATCH: Capture Line Number from hunk header
+            elif [[ "$line" =~ ^@@\ -[0-9,]+\ \+([0-9]+) ]]; then
+              CURRENT_LINE="${BASH_REMATCH[1]}"
+            
+            # BASH_REMATCH: Capture added content (line starts with + but isn't +++)
+            elif [[ "$line" =~ ^\+([^\+].*) ]]; then
+              CONTENT="${BASH_REMATCH[1]}"
+              MATCH=$(echo "$CONTENT" | grep -Eio "$COMBINED_REGEX" | sort -u || true)
+
+              # if content matches and it does not contain the suppress tag
+              if [[ -n "$MATCH" ]] && [[ "$CONTENT" != *"$SUPPRESS_TAG"* ]]; then
+                # Clean up: turn multiple hits into a single comma-separated line
+                CLEAN_MATCH=$(echo "$MATCH" | tr '\n' ',' | sed 's/,$//; s/,/, /g')
+                CODE_REPORT+="- 📄 **$CURRENT_FILE** (Line ~$CURRENT_LINE): \`$CLEAN_MATCH\`"$'\n'
+              fi
+              # Keep track of line numbers in multi-line additions
+              ((CURRENT_LINE++))
+            fi
+          done <<< "$DIFF_DATA"
+
+          if [ -n "$CODE_REPORT" ]; then
+            echo -e "\n#### 💻 Code Changes\n$CODE_REPORT" >> scan_results.md
+          fi
+
+          # Final logic to decide if we post a comment
+          if [ -n "$COMMIT_MATCHES" ] || [ -n "$CODE_REPORT" ]; then
+            echo "found_matches=true" >> $GITHUB_OUTPUT
+          else
+            echo "found_matches=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post PR Comment
+        if: steps.scanner.outputs.found_matches == 'true'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: scan_results.md

@@ -1,0 +1,36 @@
+name: "Compliance: Commit Message"
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # This line tells GitHub to use your actual branch, not the merge preview
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate Commit Messages
+        run: |
+          mapfile -t COMMIT_MSGS < <(git log origin/${{ github.base_ref }}..HEAD --pretty=format:"%s")
+          REGEX="^FIR-[0-9]+: .+$"
+
+          echo "Checking ${#COMMIT_MSGS[@]} commit(s)..."
+
+          for msg in "${COMMIT_MSGS[@]}"; do
+            if [[ ! "$msg" =~ $REGEX ]]; then
+              echo "-------------------------------------------------------"
+              echo "❌ ERROR: Invalid commit message format!"
+              echo "Message: '$msg'"
+              echo "Expected format: FIR-123: your description"
+              echo "-------------------------------------------------------"
+              exit 1
+            else
+              echo "✅ Valid: $msg"
+            fi
+          done

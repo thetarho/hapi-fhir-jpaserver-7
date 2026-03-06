@@ -1,0 +1,18 @@
+name: "Enforce Branch Naming"
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  enforce-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce Branch Name
+        run: |
+          BRANCH_NAME="${{ github.head_ref }}"
+          REGEX="^(feature|hotfix|bugfix|test)/FIR-[0-9]+"
+          if [[ ! $BRANCH_NAME =~ $REGEX ]]; then
+            echo "ERROR: Branch name '$BRANCH_NAME' does not match the required format."
+            echo "Pattern: $REGEX"
+            exit 1
+          fi

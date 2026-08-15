@@ -25,25 +25,19 @@ RUN mvn package -DskipTests spring-boot:repackage -Pboot
 RUN mkdir /app && cp /tmp/hapi-fhir-jpaserver-starter/target/ROOT.war /app/main.war
 
 
-########### bitnami tomcat version is suitable for debugging and comes with a shell
-########### it can be built using eg. `docker build --target tomcat .`
-FROM bitnami/tomcat:10.1 AS tomcat
-
-USER root
-RUN rm -rf /opt/bitnami/tomcat/webapps/ROOT && \
-    mkdir -p /opt/bitnami/hapi/data/hapi/lucenefiles && \
-    chown -R 1001:1001 /opt/bitnami/hapi/data/hapi/lucenefiles && \
-    chmod 775 /opt/bitnami/hapi/data/hapi/lucenefiles
-
-RUN mkdir -p /target && chown -R 1001:1001 target
-USER 1001
-
-COPY --chown=1001:1001 catalina.properties /opt/bitnami/tomcat/conf/catalina.properties
-COPY --chown=1001:1001 server.xml /opt/bitnami/tomcat/conf/server.xml
-COPY --from=build-hapi --chown=1001:1001 /tmp/hapi-fhir-jpaserver-starter/target/ROOT.war /opt/bitnami/tomcat/webapps/ROOT.war
-COPY --from=build-hapi --chown=1001:1001 /tmp/hapi-fhir-jpaserver-starter/opentelemetry-javaagent.jar /app
-
-ENV ALLOW_EMPTY_PASSWORD=yes
+########### The optional `tomcat` debug stage was REMOVED (TRDAT-589).
+########### It was `FROM bitnami/tomcat:10.1`, and that tag no longer exists on
+########### Docker Hub — Bitnami moved their catalog — so every build that
+########### resolved it failed with "docker.io/bitnami/tomcat:10.1: not found".
+########### That is why maven.yml / build-images.yaml / the smoke tests have
+########### been red since mid-June: build-images.yaml sets `target: tomcat`,
+########### which forces BuildKit to build this otherwise-unused stage.
+###########
+########### Nothing consumed it: it was a debugging convenience ("comes with a
+########### shell"), no deployment references a tomcat-variant hapi image, and
+########### the images it fed were docker.io/hapiproject/hapi — the UPSTREAM
+########### project's namespace, which we do not publish to. The distroless
+########### `default` stage below is and remains the image we ship.
 
 ########### distroless brings focus on security and runs on plain spring boot - this is the default image
 FROM gcr.io/distroless/java17-debian12:nonroot AS default

@@ -510,6 +510,14 @@
                 <version>3.4.0</version>
                 <configuration>
                     <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                    <!--
+                    Same JDK17 module access as the surefire argLine above, for the same reason:
+                    embedded Tomcat's static initializer reflects into java.io.FileSystem, and
+                    failsafe forks its own JVM. The *IT classes (CdsHooksServletIT,
+                    ExampleServer*IT, ...) start the web server, so without this `mvn verify`
+                    fails them all with InaccessibleObjectException.
+                    -->
+                    <argLine>--add-opens java.base/java.io=ALL-UNNAMED</argLine>
                 </configuration>
                 <executions>
                     <execution>

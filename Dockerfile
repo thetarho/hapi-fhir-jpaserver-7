@@ -1,4 +1,13 @@
-FROM docker.io/library/maven:3.9.9-eclipse-temurin-17 AS build-hapi
+# Pinned to $BUILDPLATFORM so the Maven build runs ONCE on the runner's native
+# architecture instead of once per target platform. Safe here because the
+# runtime stage only COPYs artifacts out of this chain and never executes
+# anything from it: ROOT.war and opentelemetry-javaagent.jar are both pure
+# bytecode, identical for amd64 and arm64. build-distroless derives FROM
+# build-hapi, so pinning this one stage covers the whole build chain, and only
+# the distroless runtime stage is built per-architecture. Without this, the
+# emulated arm64 leg would re-run the entire HAPI Maven build under QEMU to
+# produce a byte-identical war. (TRDAT-589)
+FROM --platform=$BUILDPLATFORM docker.io/library/maven:3.9.9-eclipse-temurin-17 AS build-hapi
 WORKDIR /tmp/hapi-fhir-jpaserver-starter
 
 ARG OPENTELEMETRY_JAVA_AGENT_VERSION=1.33.3

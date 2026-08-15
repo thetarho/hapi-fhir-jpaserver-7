@@ -28,15 +28,10 @@ jobs:
             type=match,pattern=image/(.*),group=1,enable=${{github.event_name != 'pull_request'}}
            
 
-      - name: Container meta for tomcat image
-        id: docker_tomcat_meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGES }}
-          tags: |
-            type=match,pattern=image/(.*),group=1,enable=${{github.event_name != 'pull_request'}}
-          flavor: |
-            suffix=-tomcat,onlatest=true
+      # The tomcat image meta/build steps were removed with the Dockerfile's
+      # `tomcat` stage — see the note there. bitnami/tomcat:10.1 no longer
+      # exists upstream, so `target: tomcat` failed to resolve and took this
+      # whole workflow (and the smoke tests) down with it. (TRDAT-589)
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -71,14 +66,3 @@ jobs:
           platforms: ${{ env.PLATFORMS }}
           target: default
 
-      - name: Build and push tomcat image
-        id: docker_build_tomcat
-        uses: docker/build-push-action@v5
-        with:
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.docker_tomcat_meta.outputs.tags }}
-          labels: ${{ steps.docker_tomcat_meta.outputs.labels }}
-          platforms: ${{ env.PLATFORMS }}
-          target: tomcat

@@ -408,6 +408,27 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.4.0</version>
+                    <configuration>
+                        <!--
+                        Embedded Tomcat's static initializer (org.apache.catalina.startup.Tomcat.<clinit>)
+                        reflects into java.io.FileSystem.useCanonCaches. Under JDK 17 that field is not
+                        open to the unnamed module, so any test that starts the web server dies with
+
+                          InaccessibleObjectException: Unable to make field static final boolean
+                          java.io.FileSystem.useCanonCaches accessible: module java.base does not
+                          "opens java.io" to unnamed module
+
+                        which surfaces as "Failed to load ApplicationContext" in CustomBeanTest,
+                        CustomInterceptorTest and friends.
+
+                        This is the SAME module access the runtime already grants — see the
+                        "add-opens java.base/java.io=ALL-UNNAMED" flag in the Dockerfile ENTRYPOINT —
+                        but the surefire JVM is a separate process and never inherited it. Granting
+                        it here makes the test JVM match how the application actually runs.
+                        (XML comments cannot contain a double hyphen, hence the quoted flag name.)
+                        -->
+                        <argLine>--add-opens java.base/java.io=ALL-UNNAMED</argLine>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
@@ -426,6 +447,18 @@
                     (at the moment only tomcat works)
                     -->
 		    <loaderImplementation>CLASSIC</loaderImplementation>
+                    <!--
+                    Same JDK17 module access the surefire argLine grants, for the same reason:
+                    embedded Tomcat's static initializer reflects into java.io.FileSystem.
+                    `spring-boot:run` forks its own JVM, so it needs the flag explicitly or the
+                    server dies during startup with InaccessibleObjectException.
+
+                    This is what the Smoke Tests workflow runs to bring the server up
+                    (mvn -P boot spring-boot:run), so without this the smoke tests fail every
+                    request against a server that never started. The Dockerfile ENTRYPOINT already
+                    passes the equivalent flag for the shipped image.
+                    -->
+                    <jvmArguments>--add-opens java.base/java.io=ALL-UNNAMED</jvmArguments>
                 </configuration>
                 <executions>
                     <execution>
@@ -477,6 +510,14 @@
                 <version>3.4.0</version>
                 <configuration>
                     <redirectTestOutputToFile>true</redirectTestOutputToFile>
+                    <!--
+                    Same JDK17 module access as the surefire argLine above, for the same reason:
+                    embedded Tomcat's static initializer reflects into java.io.FileSystem, and
+                    failsafe forks its own JVM. The *IT classes (CdsHooksServletIT,
+                    ExampleServer*IT, ...) start the web server, so without this `mvn verify`
+                    fails them all with InaccessibleObjectException.
+                    -->
+                    <argLine>--add-opens java.base/java.io=ALL-UNNAMED</argLine>
                 </configuration>
                 <executions>
                     <execution>

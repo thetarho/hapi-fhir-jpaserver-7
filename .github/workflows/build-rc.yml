@@ -126,6 +126,16 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          # Single-box appliances ship on arm64 (Mac mini, HP ZGX). build-main.yml
+          # has published multi-arch, but this RC path never did — so every RC tag
+          # was amd64-only and a single-box RC deploy failed with "no matching
+          # manifest for linux/arm64/v8" (zgx-5d45, run 33619571639).
+          #
+          # No BASE_IMAGE_TAG needed here, unlike TRDataServices/ThetaRhoAppServer:
+          # this image builds FROM the PUBLIC gcr.io/distroless/java17-debian12,
+          # which already publishes amd64 + arm64 upstream. The maven build stage is
+          # $BUILDPLATFORM-pinned, so only the runtime layer varies per arch.
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
           labels: ${{ steps.meta.outputs.labels }}
